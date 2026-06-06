@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,10 +41,10 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
-import { storageService } from '@/services/storage/storageService';
 import { stockService } from '@/services/stock/stockService';
 import { auditService } from '@/services/audit/auditService';
 import { DeliveryNote, DocumentLine, DocumentTotals, Client, Product, DocumentStatus } from '@/core/types/index';
+import { useAppStore } from '@/store/useAppStore';
 
 const lineSchema = z.object({
   productId: z.string().min(1, "Produit requis"),
@@ -268,20 +268,24 @@ const DeliveryForm: React.FC = () => {
   const navigate = useNavigate();
   const isEdit = !!id;
 
-  const [clients, setClients] = useState<Client[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const clients = useAppStore((state) => state.clients) as Client[];
+  const products = useAppStore((state) => state.products) as Product[];
+  const deliveries = useAppStore((state) => state.deliveries) as DeliveryNote[];
+  const settings = useAppStore((state) => state.settings);
+  const getNextNumber = useAppStore((state) => state.getNextNumber);
+  const saveDeliveryDocument = useAppStore((state) => state.saveDeliveryDocument);
 
   const form = useForm<DeliveryFormValues>({
     resolver: zodResolver(deliverySchema),
     defaultValues: {
-      number: `BL-${new Date().getFullYear()}-${String(storageService.loadCollection('deliveries').length + 1).padStart(4, '0')}`,
+      number: getNextNumber('delivery'),
       date: new Date().toISOString().split('T')[0],
       clientId: '',
       status: 'draft',
       driverName: '',
       vehicleInfo: '',
       notes: '',
-      lines: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0, tvaRate: 20 }],
+      lines: [{ productId: '', quantity: 1, unitPrice: 0, discount: 0, tvaRate: settings.defaultTvaRate || 20 }],
     },
   });
 
@@ -291,11 +295,8 @@ const DeliveryForm: React.FC = () => {
   });
 
   useEffect(() => {
-    setClients(storageService.loadCollection('clients'));
-    setProducts(storageService.loadCollection('products'));
-
     if (isEdit && id) {
-      const delivery = storageService.loadCollection('deliveries').find(d => d.id === id);
+      const delivery = deliveries.find(d => d.id === id);
       if (delivery) {
         form.reset({
           number: delivery.number,
@@ -315,7 +316,7 @@ const DeliveryForm: React.FC = () => {
         });
       }
     }
-  }, [id, isEdit, form]);
+  }, [id, isEdit, form, deliveries]);
 
   const watchLines = form.watch("lines");
 
@@ -346,73 +347,63 @@ const DeliveryForm: React.FC = () => {
   const totals = calculateTotals();
 
   const onSubmit = (values: DeliveryFormValues) => {
-    console.log("Submitting delivery:", values);
     try {
-      const deliveries = storageService.loadCollection('deliveries');
-    const existingDelivery = isEdit ? deliveries.find(d => d.id === id) : null;
-    const client = clients.find(c => c.id === values.clientId);
+      const existingDelivery = isEdit ? deliveries.find(d => d.id === id) : null;
+      const client = clients.find(c => c.id === values.clientId);
+      const deliveryId = isEdit ? id! : crypto.randomUUID();
 
-    const docLines: DocumentLine[] = values.lines.map(line => {
-      const product = products.find(p => p.id === line.productId);
-      const lineHT = (line.quantity || 0) * (line.unitPrice || 0);
-      const lineDiscount = lineHT * ((line.discount || 0) / 100);
-      const discountedHT = lineHT - lineDiscount;
-      const lineTVA = discountedHT * ((line.tvaRate || 0) / 100);
+      const docLines: DocumentLine[] = values.lines.map(line => {
+        const product = products.find(p => p.id === line.productId);
+        const lineHT = (line.quantity || 0) * (line.unitPrice || 0);
+        const lineDiscount = lineHT * ((line.discount || 0) / 100);
+        const discountedHT = lineHT - lineDiscount;
+        const lineTVA = discountedHT * ((line.tvaRate || 0) / 100);
 
-      return {
-        id: crypto.randomUUID(),
-        productId: line.productId,
-        productName: product?.name,
-        quantity: line.quantity,
-        unitPrice: line.unitPrice,
-        discount: line.discount,
-        tvaRate: line.tvaRate,
-        totalHT: discountedHT,
-        totalTVA: lineTVA,
-        totalTTC: discountedHT + lineTVA,
+        return {
+          id: crypto.randomUUID(),
+          productId: line.productId,
+          productName: product?.name,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          discount: line.discount,
+          tvaRate: line.tvaRate,
+          totalHT: discountedHT,
+          totalTVA: lineTVA,
+          totalTTC: discountedHT + lineTVA,
+        };
+      });
+
+      const docTotals: DocumentTotals = calculateTotals();
+
+      const deliveryData: DeliveryNote = {
+        id: deliveryId,
+        createdAt: isEdit ? existingDelivery!.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        ...values,
+        clientName: client?.name,
+        lines: docLines,
+        totals: docTotals,
       };
-    });
 
-    const docTotals: DocumentTotals = calculateTotals();
+      stockService.processDocumentStock(
+        'DELIVERY',
+        deliveryId,
+        values.lines,
+        values.status,
+        existingDelivery?.status,
+        deliveryData.number
+      );
 
-    const deliveryData: DeliveryNote = {
-      id: isEdit ? id! : crypto.randomUUID(),
-      createdAt: isEdit ? existingDelivery!.createdAt : new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      ...values,
-      clientName: client?.name,
-      lines: docLines,
-      totals: docTotals,
-    };
+      saveDeliveryDocument(deliveryData);
 
-    // Handle stock movement
-    stockService.processDocumentStock(
-      'DELIVERY',
-      deliveryData.id,
-      values.lines,
-      values.status,
-      existingDelivery?.status,
-      deliveryData.number
-    );
+      auditService.log(
+        isEdit ? 'UPDATE' : 'CREATE',
+        'DELIVERY',
+        deliveryData.id,
+        `Delivery ${deliveryData.number} ${isEdit ? 'updated' : 'created'} with status ${deliveryData.status}`
+      );
 
-    if (isEdit) {
-      const index = deliveries.findIndex(d => d.id === id);
-      deliveries[index] = deliveryData;
-    } else {
-      deliveries.push(deliveryData);
-    }
-
-    storageService.saveCollection('deliveries', deliveries);
-
-    // Audit Log
-    auditService.log(
-      isEdit ? 'UPDATE' : 'CREATE',
-      'DELIVERY',
-      deliveryData.id,
-      `Delivery ${deliveryData.number} ${isEdit ? 'updated' : 'created'} with status ${deliveryData.status}`
-    );
-
-    navigate('/deliveries');
+      navigate('/deliveries');
     } catch (error) {
       console.error("Error saving delivery:", error);
     }

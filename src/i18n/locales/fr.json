@@ -401,7 +401,9 @@
     "productsDescription": "Liste des produits inclus dans ce bon de livraison.",
     "addProduct": "Ajouter un produit",
     "addProductPlaceholder": "Ajoutez des produits à ce bon de livraison",
-    "convertToInvoice": "Convertir en facture"
+    "convertToInvoice": "Convertir en facture",
+    "convertedInvoice": "Facture creee : {{number}}",
+    "convertToInvoiceUnavailable": "Conversion indisponible pour ce bon de livraison."
   },
   "sales": {
     "title": "Ventes",

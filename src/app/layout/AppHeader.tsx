@@ -24,10 +24,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useAppStore } from '@/store/useAppStore';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const AppHeader: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const { 
     settings, 
     alerts, 
@@ -46,6 +48,11 @@ export const AppHeader: React.FC = () => {
     const newLang = settings.language === 'fr' ? 'ar' : 'fr';
     i18n.changeLanguage(newLang);
     updateSettings({ language: newLang });
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -120,12 +127,17 @@ export const AppHeader: React.FC = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem disabled>
+              <User className="w-4 h-4 me-2" />
+              {user?.email || 'Utilisateur'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate('/settings')}>
               <User className="w-4 h-4 me-2" />
               {t('nav.settings')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem className="text-destructive" onClick={handleLogout}>
               <LogOut className="w-4 h-4 me-2" />
               {t('nav.logout')}
             </DropdownMenuItem>

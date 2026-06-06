@@ -3,7 +3,6 @@
 // =====================================
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import { storageService } from '@/services/storage/storageService';
 import { 
   LocalDatabase, 
@@ -77,7 +76,13 @@ interface AppState {
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateProduct: (id: string, product: Partial<Product>) => void;
   deleteProduct: (id: string) => void;
-  updateStock: (productId: string, quantity: number, type: StockMovement['type'], referenceId?: string) => void;
+  updateStock: (
+    productId: string,
+    quantity: number,
+    type: StockMovement['type'],
+    referenceId?: string,
+    metadata?: { referenceType?: string; notes?: string; branch?: string }
+  ) => void;
 
   // Actions - Categories
   addCategory: (category: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => void;
@@ -87,6 +92,7 @@ interface AppState {
   // Actions - Purchases
   addPurchase: (purchase: Omit<Purchase, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updatePurchase: (id: string, purchase: Partial<Purchase>) => void;
+  savePurchaseDocument: (purchase: Purchase) => void;
   validatePurchase: (id: string) => void;
   cancelPurchase: (id: string) => void;
 
@@ -98,6 +104,7 @@ interface AppState {
   // Actions - Deliveries
   addDelivery: (delivery: Omit<DeliveryNote, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateDelivery: (id: string, delivery: Partial<DeliveryNote>) => void;
+  saveDeliveryDocument: (delivery: DeliveryNote) => void;
   validateDelivery: (id: string) => void;
   cancelDelivery: (id: string) => void;
   convertDeliveryToInvoice: (deliveryId: string) => Invoice | null;
@@ -105,6 +112,8 @@ interface AppState {
   // Actions - Sales
   addSale: (sale: Omit<Sale, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateSale: (id: string, sale: Partial<Sale>) => void;
+  deleteSale: (id: string) => void;
+  saveSaleDocument: (sale: Sale) => void;
 
   // Actions - Quotations conversion
   convertQuotationToDelivery: (quotationId: string) => DeliveryNote | null;
@@ -113,6 +122,7 @@ interface AppState {
   // Actions - Invoices
   addInvoice: (invoice: Omit<Invoice, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateInvoice: (id: string, invoice: Partial<Invoice>) => void;
+  saveInvoiceDocument: (invoice: Invoice) => void;
 
   // Actions - Payments
   addPayment: (payment: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'>) => void;
@@ -161,8 +171,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>()(
-  persist(
-    (set, get) => ({
+  (set, get) => ({
       // Initial State
       clients: [],
       suppliers: [],
@@ -333,7 +342,7 @@ export const useAppStore = create<AppState>()(
         get().addAuditLog('DELETE', 'product', id, `Produit supprimé`);
       },
 
-      updateStock: (productId, quantity, type, referenceId) => {
+      updateStock: (productId, quantity, type, referenceId, metadata) => {
         const product = get().products.find((p) => p.id === productId);
         if (!product) return;
 
@@ -349,7 +358,10 @@ export const useAppStore = create<AppState>()(
           quantity,
           previousStock,
           newStock,
+          referenceType: metadata?.referenceType,
           referenceId,
+          notes: metadata?.notes,
+          branch: metadata?.branch,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -456,6 +468,25 @@ export const useAppStore = create<AppState>()(
         get().saveData();
       },
 
+      savePurchaseDocument: (purchase) => {
+        const exists = get().purchases.some((item) => item.id === purchase.id);
+        set((state) => ({
+          purchases: exists
+            ? state.purchases.map((item) => (item.id === purchase.id ? purchase : item))
+            : [...state.purchases, purchase],
+          settings: exists
+            ? state.settings
+            : {
+                ...state.settings,
+                numbering: {
+                  ...state.settings.numbering,
+                  purchaseCounter: state.settings.numbering.purchaseCounter + 1,
+                },
+              },
+        }));
+        get().saveData();
+      },
+
       validatePurchase: (id) => {
         const purchase = get().purchases.find((p) => p.id === id);
         if (!purchase || purchase.status !== 'draft') return;
@@ -511,6 +542,25 @@ export const useAppStore = create<AppState>()(
           deliveries: state.deliveries.map((d) =>
             d.id === id ? { ...d, ...delivery, updatedAt: new Date().toISOString() } : d
           ),
+        }));
+        get().saveData();
+      },
+
+      saveDeliveryDocument: (delivery) => {
+        const exists = get().deliveries.some((item) => item.id === delivery.id);
+        set((state) => ({
+          deliveries: exists
+            ? state.deliveries.map((item) => (item.id === delivery.id ? delivery : item))
+            : [...state.deliveries, delivery],
+          settings: exists
+            ? state.settings
+            : {
+                ...state.settings,
+                numbering: {
+                  ...state.settings.numbering,
+                  deliveryCounter: state.settings.numbering.deliveryCounter + 1,
+                },
+              },
         }));
         get().saveData();
       },
@@ -722,6 +772,30 @@ export const useAppStore = create<AppState>()(
         get().saveData();
       },
 
+      deleteSale: (id) => {
+        set((state) => ({ sales: state.sales.filter((sale) => sale.id !== id) }));
+        get().saveData();
+      },
+
+      saveSaleDocument: (sale) => {
+        const exists = get().sales.some((item) => item.id === sale.id);
+        set((state) => ({
+          sales: exists
+            ? state.sales.map((item) => (item.id === sale.id ? sale : item))
+            : [...state.sales, sale],
+          settings: exists
+            ? state.settings
+            : {
+                ...state.settings,
+                numbering: {
+                  ...state.settings.numbering,
+                  saleCounter: state.settings.numbering.saleCounter + 1,
+                },
+              },
+        }));
+        get().saveData();
+      },
+
       // Invoice Actions
       addInvoice: (invoice) => {
         const now = new Date().toISOString();
@@ -740,6 +814,25 @@ export const useAppStore = create<AppState>()(
           invoices: state.invoices.map((i) =>
             i.id === id ? { ...i, ...invoice, updatedAt: new Date().toISOString() } : i
           ),
+        }));
+        get().saveData();
+      },
+
+      saveInvoiceDocument: (invoice) => {
+        const exists = get().invoices.some((item) => item.id === invoice.id);
+        set((state) => ({
+          invoices: exists
+            ? state.invoices.map((item) => (item.id === invoice.id ? invoice : item))
+            : [...state.invoices, invoice],
+          settings: exists
+            ? state.settings
+            : {
+                ...state.settings,
+                numbering: {
+                  ...state.settings.numbering,
+                  invoiceCounter: state.settings.numbering.invoiceCounter + 1,
+                },
+              },
         }));
         get().saveData();
       },
@@ -1055,13 +1148,5 @@ export const useAppStore = create<AppState>()(
 
         return `${prefix}-${year}-${String(counter).padStart(4, '0')}`;
       },
-    }),
-    {
-      name: 'app-ui-state',
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        sidebarOpen: state.sidebarOpen,
-      }),
-    }
-  )
+    })
 );

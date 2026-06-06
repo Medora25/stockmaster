@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PlusCircle, Printer, Trash2 } from 'lucide-react';
@@ -21,27 +21,22 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
 import { Button } from '@/components/ui/button';
-import { storageService } from '@/services/storage/storageService';
 import { pdfService } from '@/services/pdf/pdfService';
 import { auditService } from '@/services/audit/auditService';
 import { useToast } from '@/hooks/use-toast';
 import { Sale, DocumentStatus } from '@/core/types/index';
+import { useAppStore } from '@/store/useAppStore';
 
 const SalesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
-  const [sales, setSales] = useState<Sale[]>([]);
-
-  useEffect(() => {
-    const loadedSales = storageService.loadCollection('sales');
-    setSales(loadedSales);
-  }, []);
+  const sales = useAppStore((state) => state.sales) as Sale[];
+  const deleteSale = useAppStore((state) => state.deleteSale);
 
   const handleDelete = (id: string) => {
     if (window.confirm(t('common.confirmDelete'))) {
       const saleToDelete = sales.find(s => s.id === id);
-      storageService.remove('sales', (sale) => sale.id === id);
-      setSales(sales.filter(s => s.id !== id));
+      deleteSale(id);
       
       if (saleToDelete) {
         auditService.log('DELETE', 'SALE', id, `Vente ${saleToDelete.number} supprimée`);
@@ -53,6 +48,14 @@ const SalesPage: React.FC = () => {
       });
     }
   };
+
+  const sortedSales = useMemo(
+    () =>
+      [...sales].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      ),
+    [sales]
+  );
 
   const columns: ColumnDef<Sale>[] = [
     {
@@ -133,7 +136,7 @@ const SalesPage: React.FC = () => {
   ];
 
   const table = useReactTable({
-    data: sales,
+    data: sortedSales,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });

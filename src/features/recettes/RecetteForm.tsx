@@ -19,9 +19,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { storageService } from '@/services/storage/storageService';
 import { auditService } from '@/services/audit/auditService';
 import { CashEntry, CashEntryType, CashEntryCategory, PaymentMethod } from '@/core/types/index';
+import { useAppStore } from '@/store/useAppStore';
 
 const recetteSchema = z.object({
   branch: z.string().min(1, "Branche requise"),
@@ -45,7 +45,10 @@ const RecetteForm: React.FC = () => {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const isExpensePreset = params.get('preset') === 'expense';
-  const settings = storageService.loadCollection('settings');
+  const settings = useAppStore((state) => state.settings);
+  const recettes = useAppStore((state) => state.recettes) as CashEntry[];
+  const addCashEntry = useAppStore((state) => state.addCashEntry);
+  const updateCashEntry = useAppStore((state) => state.updateCashEntry);
   const branches = settings.branches || [];
   const defaultBranch = settings.defaultBranch || branches[0] || '';
 
@@ -65,7 +68,7 @@ const RecetteForm: React.FC = () => {
 
   useEffect(() => {
     if (isEdit && id) {
-      const entry = storageService.loadCollection('recettes').find(r => r.id === id);
+      const entry = recettes.find(r => r.id === id);
       if (entry) {
         form.reset({
           branch: entry.branch || defaultBranch,
@@ -79,11 +82,9 @@ const RecetteForm: React.FC = () => {
         });
       }
     }
-  }, [id, isEdit, form, defaultBranch]);
+  }, [id, isEdit, form, defaultBranch, recettes]);
 
   const onSubmit = (values: RecetteFormValues) => {
-    const recettes = storageService.loadCollection('recettes');
-    
     const entryData: CashEntry = {
       id: isEdit ? id! : crypto.randomUUID(),
       createdAt: isEdit ? recettes.find(r => r.id === id)!.createdAt : new Date().toISOString(),
@@ -93,13 +94,10 @@ const RecetteForm: React.FC = () => {
     };
 
     if (isEdit) {
-      const index = recettes.findIndex(r => r.id === id);
-      recettes[index] = entryData;
+      updateCashEntry(id!, entryData);
     } else {
-      recettes.push(entryData);
+      addCashEntry(entryData);
     }
-
-    storageService.saveCollection('recettes', recettes);
 
     // Audit Log
     auditService.log(

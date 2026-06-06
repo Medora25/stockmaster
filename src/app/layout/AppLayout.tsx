@@ -2,26 +2,49 @@
 // App Layout - Main Layout Component
 // =====================================
 
-import React, { useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { useAppStore } from '@/store/useAppStore';
 import { useAlertSystem } from '@/hooks/useAlertSystem';
+import { storageService } from '@/services/storage/storageService';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const AppLayout: React.FC = () => {
   const { i18n } = useTranslation();
-  const location = useLocation();
-  const { loadData, settings, sidebarOpen } = useAppStore();
+  const { user } = useAuth();
+  const { loadData, settings } = useAppStore();
+  const [isReady, setIsReady] = useState(false);
 
   // Initialize alert system
-  useAlertSystem();
+  useAlertSystem(isReady);
 
   // Load data on mount
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let isMounted = true;
+
+    const initializeData = async () => {
+      if (!user) {
+        if (isMounted) setIsReady(false);
+        return;
+      }
+
+      await storageService.initialize();
+      loadData();
+
+      if (isMounted) {
+        setIsReady(true);
+      }
+    };
+
+    initializeData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [loadData, user]);
 
   // Set RTL direction based on language
   useEffect(() => {
@@ -89,6 +112,14 @@ export const AppLayout: React.FC = () => {
     const nav = settings.navigationTheme || 'dark';
     document.documentElement.classList.add(`nav-${nav}`);
   }, [settings.navigationTheme]);
+
+  if (!isReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/40">
+        <div className="text-sm text-muted-foreground">جارٍ تحميل البيانات...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-muted/40">

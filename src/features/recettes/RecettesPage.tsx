@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PlusCircle, ArrowUpCircle, ArrowDownCircle, Printer } from 'lucide-react';
@@ -21,21 +21,15 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
 import { Button } from '@/components/ui/button';
-import { storageService } from '@/services/storage/storageService';
 import { pdfService } from '@/services/pdf/pdfService';
 import { CashEntry, CashEntryType } from '@/core/types/index';
 import { useAppStore } from '@/store/useAppStore';
 
 const RecettesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const [recettes, setRecettes] = useState<CashEntry[]>([]);
-  const { clients } = useAppStore();
+  const recettes = useAppStore((state) => state.recettes) as CashEntry[];
+  const clients = useAppStore((state) => state.clients);
   const [view, setView] = useState<'ALL' | 'ENTREE' | 'SORTIE'>('ALL');
-
-  useEffect(() => {
-    const loadedRecettes = storageService.loadCollection('recettes');
-    setRecettes(loadedRecettes);
-  }, []);
 
   const filtered = useMemo(() => {
     if (view === 'ALL') return recettes;

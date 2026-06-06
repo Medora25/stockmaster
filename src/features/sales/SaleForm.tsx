@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,10 +42,10 @@ import {
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { storageService } from '@/services/storage/storageService';
 import { stockService } from '@/services/stock/stockService';
 import { auditService } from '@/services/audit/auditService';
 import { Sale, DocumentLine, DocumentTotals, Client, Product, DocumentStatus, PaymentMethod, PaymentStatus } from '@/core/types/index';
+import { useAppStore } from '@/store/useAppStore';
 
 const lineSchema = z.object({
   productId: z.string().min(1, "Produit requis"),
@@ -295,10 +295,12 @@ const SaleForm: React.FC = () => {
   const navigate = useNavigate();
   const isEdit = !!id;
 
-  const [clients, setClients] = useState<Client[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  
-  const settings = storageService.loadCollection('settings');
+  const clients = useAppStore((state) => state.clients) as Client[];
+  const products = useAppStore((state) => state.products) as Product[];
+  const sales = useAppStore((state) => state.sales) as Sale[];
+  const settings = useAppStore((state) => state.settings);
+  const getNextNumber = useAppStore((state) => state.getNextNumber);
+  const saveSaleDocument = useAppStore((state) => state.saveSaleDocument);
   const branches = settings.branches || [];
   const defaultBranch = settings.defaultBranch || branches[0] || '';
 
@@ -306,7 +308,7 @@ const SaleForm: React.FC = () => {
     resolver: zodResolver(saleSchema),
     defaultValues: {
       branch: defaultBranch,
-      number: `VT-${new Date().getFullYear()}-${String(storageService.loadCollection('sales').length + 1).padStart(4, '0')}`,
+      number: getNextNumber('sale'),
       date: new Date().toISOString().split('T')[0],
       clientId: '',
       status: 'draft',
@@ -325,11 +327,8 @@ const SaleForm: React.FC = () => {
   });
 
   useEffect(() => {
-    setClients(storageService.loadCollection('clients'));
-    setProducts(storageService.loadCollection('products'));
-
     if (isEdit && id) {
-      const sale = storageService.loadCollection('sales').find(s => s.id === id);
+      const sale = sales.find(s => s.id === id);
       if (sale) {
         form.reset({
           branch: sale.branch || defaultBranch,
@@ -351,7 +350,7 @@ const SaleForm: React.FC = () => {
         });
       }
     }
-  }, [id, isEdit, form, defaultBranch]);
+  }, [id, isEdit, form, defaultBranch, sales]);
 
   const watchLines = form.watch("lines");
 
@@ -395,9 +394,9 @@ const SaleForm: React.FC = () => {
   }, [paymentStatus, totals.totalTTC, form]);
 
   const onSubmit = (values: SaleFormValues) => {
-    const sales = storageService.loadCollection('sales');
     const existingSale = isEdit ? sales.find(s => s.id === id) : null;
     const client = clients.find(c => c.id === values.clientId);
+    const saleId = isEdit ? id! : crypto.randomUUID();
 
     const docLines: DocumentLine[] = values.lines.map(line => {
       const product = products.find(p => p.id === line.productId);
@@ -423,7 +422,7 @@ const SaleForm: React.FC = () => {
     const docTotals: DocumentTotals = calculateTotals();
 
     const saleData: Sale = {
-      id: isEdit ? id! : crypto.randomUUID(),
+      id: saleId,
       createdAt: isEdit ? existingSale!.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...values,
@@ -435,21 +434,13 @@ const SaleForm: React.FC = () => {
     // Handle stock movement
     stockService.processDocumentStock(
       'SALE',
-      saleData.id,
+      saleId,
       values.lines,
       values.status,
       existingSale?.status,
       saleData.number
     );
-
-    if (isEdit) {
-      const index = sales.findIndex(s => s.id === id);
-      sales[index] = saleData;
-    } else {
-      sales.push(saleData);
-    }
-
-    storageService.saveCollection('sales', sales);
+    saveSaleDocument(saleData);
 
     // Audit Log
     auditService.log(

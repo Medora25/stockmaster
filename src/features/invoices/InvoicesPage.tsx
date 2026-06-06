@@ -1,24 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { storageService } from '@/services/storage/storageService';
 import { Invoice } from '@/core/types';
 import InvoiceStats from './components/InvoiceStats';
 import InvoiceList from './components/InvoiceList';
+import { useAppStore } from '@/store/useAppStore';
 
 const InvoicesPage: React.FC = () => {
   const { t } = useTranslation();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-
-  useEffect(() => {
-    const loaded = storageService.loadCollection('invoices');
-    // Sort by date descending
-    loaded.sort((a: Invoice, b: Invoice) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    setInvoices(loaded);
-  }, []);
+  const invoices = useAppStore((state) => state.invoices) as Invoice[];
+  const sortedInvoices = useMemo(
+    () =>
+      [...invoices].sort(
+        (a: Invoice, b: Invoice) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      ),
+    [invoices]
+  );
 
   return (
     <div className="space-y-6">
@@ -45,19 +45,19 @@ const InvoicesPage: React.FC = () => {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <InvoiceStats invoices={invoices} />
+          <InvoiceStats invoices={sortedInvoices} />
           <div className="pt-4">
               <h3 className="text-lg font-medium mb-4">{t('dashboard.recentSales')}</h3>
-              <InvoiceList data={invoices.slice(0, 5)} defaultFilter="all" />
+              <InvoiceList data={sortedInvoices.slice(0, 5)} defaultFilter="all" />
           </div>
         </TabsContent>
 
         <TabsContent value="list" className="space-y-4">
-          <InvoiceList data={invoices} defaultFilter="all" />
+          <InvoiceList data={sortedInvoices} defaultFilter="all" />
         </TabsContent>
 
         <TabsContent value="unpaid" className="space-y-4">
-          <InvoiceList data={invoices} defaultFilter="unpaid" />
+          <InvoiceList data={sortedInvoices} defaultFilter="unpaid" />
         </TabsContent>
       </Tabs>
     </div>

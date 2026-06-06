@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { PlusCircle, Printer } from 'lucide-react';
+import { FileText, PlusCircle, Printer } from 'lucide-react';
 import {
   ColumnDef,
   flexRender,
@@ -21,20 +21,42 @@ import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
 import { Button } from '@/components/ui/button';
-import { storageService } from '@/services/storage/storageService';
 import { pdfService } from '@/services/pdf/pdfService';
 import { DeliveryNote, DocumentStatus } from '@/core/types/index';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useAppStore } from '@/store/useAppStore';
+import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 
 const DeliveriesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const [deliveries, setDeliveries] = useState<DeliveryNote[]>([]);
+  const { toast } = useToast();
+  const deliveries = useAppStore((state) => state.deliveries);
+  const convertDeliveryToInvoice = useAppStore((state) => state.convertDeliveryToInvoice);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  useEffect(() => {
-    const loadedDeliveries = storageService.loadCollection('deliveries');
-    setDeliveries(loadedDeliveries);
-  }, []);
+  const handleConvertToInvoice = (delivery: DeliveryNote) => {
+    const invoice = convertDeliveryToInvoice(delivery.id);
+
+    if (!invoice) {
+      toast({
+        title: t('common.error'),
+        description: t('deliveries.convertToInvoiceUnavailable', 'Conversion indisponible pour ce bon de livraison.'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    toast({
+      title: t('common.success'),
+      description: t('deliveries.convertedInvoice', { number: invoice.number }),
+      action: (
+        <ToastAction altText={t('common.view')} asChild>
+          <Link to={`/invoices/edit/${invoice.id}`}>{t('common.view')}</Link>
+        </ToastAction>
+      ),
+    });
+  };
 
   const columns: ColumnDef<DeliveryNote>[] = [
     {
@@ -88,6 +110,24 @@ const DeliveriesPage: React.FC = () => {
           >
             <Printer className="h-4 w-4" />
           </Button>
+          {row.original.status === 'validated' && !row.original.convertedToInvoice && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleConvertToInvoice(row.original)}
+            >
+              <FileText className="me-2 h-4 w-4" />
+              {t('deliveries.convertToInvoice')}
+            </Button>
+          )}
+          {row.original.convertedToInvoice && row.original.invoiceId && (
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/invoices/edit/${row.original.invoiceId}`}>
+                <FileText className="me-2 h-4 w-4" />
+                {t('common.view')}
+              </Link>
+            </Button>
+          )}
         </div>
       ),
     },

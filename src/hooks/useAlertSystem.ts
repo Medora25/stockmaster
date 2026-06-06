@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/useAppStore';
 import { AlertType } from '@/core/types';
 
-export const useAlertSystem = () => {
+export const useAlertSystem = (enabled: boolean = true) => {
   const { t } = useTranslation();
   const { 
     products, 
@@ -14,6 +14,8 @@ export const useAlertSystem = () => {
   } = useAppStore();
 
   useEffect(() => {
+    if (!enabled) return;
+
     // Only run if alerts feature is enabled
     if (!settings?.features?.alertes) return;
 
@@ -42,5 +44,5 @@ export const useAlertSystem = () => {
         }
       }
     });
-  }, [products, invoices, alerts, settings?.features?.alertes, addAlert, t]);
+  }, [enabled, products, invoices, alerts, settings?.features?.alertes, addAlert, t]);
 };

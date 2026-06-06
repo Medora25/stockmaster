@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { storageService } from '@/services/storage/storageService';
 import { auditService } from '@/services/audit/auditService';
 import { Invoice, DocumentLine, DocumentTotals, Client, Product, DocumentStatus, PaymentStatus } from '@/core/types';
 import { useAppStore } from '@/store/useAppStore';
@@ -51,10 +50,7 @@ const InvoiceForm: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = !!id;
-  const { getNextNumber, settings } = useAppStore();
-
-  const [clients, setClients] = useState<Client[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const { getNextNumber, settings, clients, products, invoices, saveInvoiceDocument } = useAppStore();
   const branches = settings.branches || [];
   const defaultBranch = settings.defaultBranch || branches[0] || '';
 
@@ -80,10 +76,8 @@ const InvoiceForm: React.FC = () => {
   });
 
   useEffect(() => {
-    setClients(storageService.loadCollection('clients'));
-    setProducts(storageService.loadCollection('products'));
     if (isEdit && id) {
-      const invoice = (storageService.loadCollection('invoices') as Invoice[]).find((inv) => inv.id === id);
+      const invoice = (invoices as Invoice[]).find((inv) => inv.id === id);
       if (invoice) {
         form.reset({
           branch: invoice.branch || defaultBranch,
@@ -105,7 +99,7 @@ const InvoiceForm: React.FC = () => {
         });
       }
     }
-  }, [id, isEdit, form, defaultBranch]);
+  }, [id, isEdit, form, defaultBranch, invoices]);
 
   const watchLines = form.watch('lines') || [];
 
@@ -133,9 +127,9 @@ const InvoiceForm: React.FC = () => {
   const totals = calculateTotals();
 
   const onSubmit = (values: InvoiceFormValues, shouldPrint: boolean = false) => {
-    const invoices = storageService.loadCollection('invoices') as Invoice[];
     const existingInvoice = isEdit ? invoices.find((inv) => inv.id === id) : null;
     const client = clients.find((c) => c.id === values.clientId);
+    const invoiceId = isEdit ? id! : crypto.randomUUID();
 
     const docLines: DocumentLine[] = values.lines.map((line) => {
       const product = products.find((p) => p.id === line.productId);
@@ -160,7 +154,7 @@ const InvoiceForm: React.FC = () => {
     const docTotals: DocumentTotals = calculateTotals();
 
     const invoiceData: Invoice = {
-      id: isEdit ? id! : crypto.randomUUID(),
+      id: invoiceId,
       createdAt: isEdit ? existingInvoice!.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       number: values.number,
@@ -177,14 +171,7 @@ const InvoiceForm: React.FC = () => {
       branch: values.branch,
     };
 
-    if (isEdit) {
-      const index = invoices.findIndex((inv) => inv.id === id);
-      invoices[index] = invoiceData;
-    } else {
-      invoices.push(invoiceData);
-    }
-
-    storageService.saveCollection('invoices', invoices);
+    saveInvoiceDocument(invoiceData);
 
     auditService.log(
       isEdit ? 'UPDATE' : 'CREATE',

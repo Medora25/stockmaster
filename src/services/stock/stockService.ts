@@ -1,5 +1,5 @@
-import { storageService } from '../storage/storageService';
-import { Product, StockMovement, StockMovementType, DocumentStatus } from '@/core/types';
+import { StockMovement, StockMovementType, DocumentStatus } from '@/core/types';
+import { useAppStore } from '@/store/useAppStore';
 
 class StockService {
   /**
@@ -27,8 +27,7 @@ class StockService {
 
     if (!isValidating && !isCancelling) return;
 
-    const products = storageService.loadCollection('products');
-    const stockMovements = storageService.loadCollection('stockMovements') || [];
+    const { products, updateStock } = useAppStore.getState();
 
     lines.forEach(line => {
       const productIndex = products.findIndex(p => p.id === line.productId);
@@ -50,44 +49,24 @@ class StockService {
         return;
       }
 
-      const previousStock = product.stockQuantity;
-      const newStock = previousStock + quantityChange;
-
-      // Update product stock
-      products[productIndex] = {
-        ...product,
-        stockQuantity: newStock,
-        updatedAt: new Date().toISOString()
-      };
-
-      // Record movement
-      const movement: StockMovement = {
-        id: crypto.randomUUID(),
-        type: movementType,
-        productId: product.id,
-        productName: product.name,
-        quantity: quantityChange,
-        previousStock,
-        newStock,
-        referenceType: documentType,
-        referenceId: documentId,
-        notes: `Document ${referenceNumber || documentId} ${isValidating ? 'validation' : 'cancellation'}`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      stockMovements.push(movement);
+      updateStock(
+        product.id,
+        quantityChange,
+        movementType,
+        documentId,
+        {
+          referenceType: documentType,
+          notes: `Document ${referenceNumber || documentId} ${isValidating ? 'validation' : 'cancellation'}`,
+        }
+      );
     });
-
-    storageService.saveCollection('products', products);
-    storageService.saveCollection('stockMovements', stockMovements);
   }
 
   /**
    * Get stock history for a specific product
    */
   getProductHistory(productId: string): StockMovement[] {
-    const movements = storageService.loadCollection('stockMovements') || [];
+    const { stockMovements: movements } = useAppStore.getState();
     return movements
       .filter(m => m.productId === productId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

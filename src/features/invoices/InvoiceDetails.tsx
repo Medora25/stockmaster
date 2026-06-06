@@ -6,17 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { storageService } from '@/services/storage/storageService';
 import { pdfService } from '@/services/pdf/pdfService';
 import { Invoice, DocumentStatus } from '@/core/types';
 import { useToast } from '@/hooks/use-toast';
 import { auditService } from '@/services/audit/auditService';
+import { useAppStore } from '@/store/useAppStore';
 
 const InvoiceDetails: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams();
   const { toast } = useToast();
-  const invoices = storageService.loadCollection('invoices') as Invoice[];
+  const invoices = useAppStore((state) => state.invoices) as Invoice[];
+  const updateInvoice = useAppStore((state) => state.updateInvoice);
   const invoice = invoices.find((i) => i.id === id);
 
   if (!invoice) {
@@ -70,23 +71,18 @@ const InvoiceDetails: React.FC = () => {
             <Button
               variant="default"
               onClick={() => {
-                const list = storageService.loadCollection('invoices') as Invoice[];
-                const idx = list.findIndex((i) => i.id === invoice.id);
-                if (idx >= 0) {
-                  const updated: Invoice = {
-                    ...list[idx],
-                    paymentStatus: 'paid',
-                    paidAmount: invoice.totals.totalTTC,
-                    updatedAt: new Date().toISOString(),
-                  };
-                  list[idx] = updated;
-                  storageService.saveCollection('invoices', list);
-                  auditService.log('UPDATE', 'INVOICE', updated.id, `Invoice ${updated.number} marked as PAID`);
-                  toast({
-                    title: t('paymentStatus.paid'),
-                    description: `${t('invoices.number')}: ${updated.number}`,
-                  });
-                }
+                const updated: Invoice = {
+                  ...invoice,
+                  paymentStatus: 'paid',
+                  paidAmount: invoice.totals.totalTTC,
+                  updatedAt: new Date().toISOString(),
+                };
+                updateInvoice(invoice.id, updated);
+                auditService.log('UPDATE', 'INVOICE', updated.id, `Invoice ${updated.number} marked as PAID`);
+                toast({
+                  title: t('paymentStatus.paid'),
+                  description: `${t('invoices.number')}: ${updated.number}`,
+                });
               }}
             >
               <CheckCircle className="me-2 h-4 w-4" />

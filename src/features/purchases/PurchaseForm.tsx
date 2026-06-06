@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,10 +26,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { storageService } from '@/services/storage/storageService';
 import { stockService } from '@/services/stock/stockService';
 import { auditService } from '@/services/audit/auditService';
 import { Purchase, DocumentLine, DocumentTotals, Supplier, Product, DocumentStatus, PaymentStatus } from '@/core/types/index';
+import { useAppStore } from '@/store/useAppStore';
 
 const lineSchema = z.object({
   productId: z.string().min(1, "Produit requis"),
@@ -58,9 +58,12 @@ export const PurchaseForm: React.FC = () => {
   const navigate = useNavigate();
   const isEdit = !!id;
 
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const settings = storageService.loadCollection('settings');
+  const suppliers = useAppStore((state) => state.suppliers) as Supplier[];
+  const products = useAppStore((state) => state.products) as Product[];
+  const purchases = useAppStore((state) => state.purchases) as Purchase[];
+  const settings = useAppStore((state) => state.settings);
+  const getNextNumber = useAppStore((state) => state.getNextNumber);
+  const savePurchaseDocument = useAppStore((state) => state.savePurchaseDocument);
   const branches = settings.branches || [];
   const defaultBranch = settings.defaultBranch || branches[0] || '';
 
@@ -68,7 +71,7 @@ export const PurchaseForm: React.FC = () => {
     resolver: zodResolver(purchaseSchema),
     defaultValues: {
       branch: defaultBranch,
-      number: `BA-${new Date().getFullYear()}-${String(storageService.loadCollection('purchases').length + 1).padStart(4, '0')}`,
+      number: getNextNumber('purchase'),
       date: new Date().toISOString().split('T')[0],
       supplierId: '',
       status: 'draft',
@@ -84,11 +87,8 @@ export const PurchaseForm: React.FC = () => {
   });
 
   useEffect(() => {
-    setSuppliers(storageService.loadCollection('suppliers'));
-    setProducts(storageService.loadCollection('products'));
-
     if (isEdit && id) {
-      const purchase = storageService.loadCollection('purchases').find(p => p.id === id);
+      const purchase = purchases.find(p => p.id === id);
       if (purchase) {
         form.reset({
           branch: purchase.branch || defaultBranch,
@@ -108,7 +108,7 @@ export const PurchaseForm: React.FC = () => {
         });
       }
     }
-  }, [id, isEdit, form, defaultBranch]);
+  }, [id, isEdit, form, defaultBranch, purchases]);
 
   const watchLines = form.watch("lines");
 
@@ -139,9 +139,9 @@ export const PurchaseForm: React.FC = () => {
   const totals = calculateTotals();
 
   const onSubmit = (values: PurchaseFormValues) => {
-    const purchases = storageService.loadCollection('purchases');
     const existingPurchase = isEdit ? purchases.find(p => p.id === id) : null;
     const supplier = suppliers.find(s => s.id === values.supplierId);
+    const purchaseId = isEdit ? id! : crypto.randomUUID();
 
     const docLines: DocumentLine[] = values.lines.map(line => {
       const product = products.find(p => p.id === line.productId);
@@ -167,7 +167,7 @@ export const PurchaseForm: React.FC = () => {
     const docTotals: DocumentTotals = calculateTotals();
 
     const purchaseData: Purchase = {
-      id: isEdit ? id! : crypto.randomUUID(),
+      id: purchaseId,
       createdAt: isEdit ? existingPurchase!.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...values,
@@ -179,21 +179,13 @@ export const PurchaseForm: React.FC = () => {
     // Handle stock movement
     stockService.processDocumentStock(
       'PURCHASE',
-      purchaseData.id,
+      purchaseId,
       values.lines,
       values.status,
       existingPurchase?.status,
       purchaseData.number
     );
-
-    if (isEdit) {
-      const index = purchases.findIndex(p => p.id === id);
-      purchases[index] = purchaseData;
-    } else {
-      purchases.push(purchaseData);
-    }
-
-    storageService.saveCollection('purchases', purchases);
+    savePurchaseDocument(purchaseData);
 
     // Audit Log
     auditService.log(

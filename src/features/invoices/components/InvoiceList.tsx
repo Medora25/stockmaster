@@ -14,9 +14,9 @@ import { MoreHorizontal, Printer, Copy, Trash2, Download } from 'lucide-react';
 import { Invoice, DocumentStatus, PaymentStatus } from '@/core/types';
 import { pdfService } from '@/services/pdf/pdfService';
 import { useNavigate } from 'react-router-dom';
-import { storageService } from '@/services/storage/storageService';
 import { auditService } from '@/services/audit/auditService';
 import { useToast } from '@/hooks/use-toast';
+import { useAppStore } from '@/store/useAppStore';
 
 interface InvoiceListProps {
   data: Invoice[];
@@ -27,6 +27,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({ data, defaultFilter = 'all' }
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const saveInvoiceDocument = useAppStore((state) => state.saveInvoiceDocument);
+  const getNextNumber = useAppStore((state) => state.getNextNumber);
   
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | DocumentStatus>('all');
@@ -76,7 +78,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({ data, defaultFilter = 'all' }
     const newInvoice: Invoice = {
       ...invoice,
       id: crypto.randomUUID(),
-      number: 'DRAFT-' + Date.now(), // Temporary, should be auto-generated on save usually
+      number: getNextNumber('invoice'),
       status: 'draft',
       paymentStatus: 'unpaid',
       paidAmount: 0,
@@ -85,10 +87,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({ data, defaultFilter = 'all' }
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    
-    const invoices = storageService.loadCollection('invoices') as Invoice[];
-    invoices.push(newInvoice);
-    storageService.saveCollection('invoices', invoices);
+    saveInvoiceDocument(newInvoice);
     
     auditService.log('CREATE', 'INVOICE', newInvoice.id, `Duplicated from ${invoice.number}`);
     

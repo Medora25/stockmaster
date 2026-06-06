@@ -1,19 +1,23 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Edit, Printer } from 'lucide-react';
+import { ArrowLeft, Edit, FileText, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { storageService } from '@/services/storage/storageService';
 import { pdfService } from '@/services/pdf/pdfService';
 import { DeliveryNote, DocumentStatus } from '@/core/types';
+import { useAppStore } from '@/store/useAppStore';
+import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 
 const DeliveryDetails: React.FC = () => {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { id } = useParams();
-  const deliveries = storageService.loadCollection('deliveries') as DeliveryNote[];
+  const deliveries = useAppStore((state) => state.deliveries) as DeliveryNote[];
+  const convertDeliveryToInvoice = useAppStore((state) => state.convertDeliveryToInvoice);
   const delivery = deliveries.find((d) => d.id === id);
 
   if (!delivery) {
@@ -48,6 +52,31 @@ const DeliveryDetails: React.FC = () => {
     }
   };
 
+  const handleConvertToInvoice = () => {
+    if (!delivery) return;
+
+    const invoice = convertDeliveryToInvoice(delivery.id);
+
+    if (!invoice) {
+      toast({
+        title: t('common.error'),
+        description: t('deliveries.convertToInvoiceUnavailable', 'Conversion indisponible pour ce bon de livraison.'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    toast({
+      title: t('common.success'),
+      description: t('deliveries.convertedInvoice', { number: invoice.number }),
+      action: (
+        <ToastAction altText={t('common.view')} asChild>
+          <Link to={`/invoices/edit/${invoice.id}`}>{t('common.view')}</Link>
+        </ToastAction>
+      ),
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -63,6 +92,20 @@ const DeliveryDetails: React.FC = () => {
             <Printer className="me-2 h-4 w-4" />
             {t('common.print')}
           </Button>
+          {delivery.status === 'validated' && !delivery.convertedToInvoice && (
+            <Button variant="outline" onClick={handleConvertToInvoice}>
+              <FileText className="me-2 h-4 w-4" />
+              {t('deliveries.convertToInvoice')}
+            </Button>
+          )}
+          {delivery.convertedToInvoice && delivery.invoiceId && (
+            <Button variant="outline" asChild>
+              <Link to={`/invoices/edit/${delivery.invoiceId}`}>
+                <FileText className="me-2 h-4 w-4" />
+                {t('common.view')}
+              </Link>
+            </Button>
+          )}
           <Button asChild>
             <Link to={`/deliveries/edit/${delivery.id}`}>
               <Edit className="me-2 h-4 w-4" />

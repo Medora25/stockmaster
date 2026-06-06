@@ -24,23 +24,18 @@ import { PlusCircle, Printer, Search, DollarSign, Receipt, CheckCircle, XCircle 
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
-import { storageService } from '@/services/storage/storageService';
 import { pdfService } from '@/services/pdf/pdfService';
 import { Purchase, DocumentStatus, PaymentStatus } from '@/core/types/index';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useAppStore } from '@/store/useAppStore';
 
 export const PurchasesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const purchases = useAppStore((state) => state.purchases) as Purchase[];
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [query, setQuery] = useState('');
 
   const selectedIds = useMemo(() => Object.keys(rowSelection), [rowSelection]);
-
-  useEffect(() => {
-    const loadedPurchases = storageService.loadCollection('purchases');
-    setPurchases(loadedPurchases);
-  }, []);
 
   const filteredPurchases = useMemo(() => {
     const q = query.trim().toLowerCase();
