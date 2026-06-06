@@ -1,73 +1,60 @@
-# Welcome to your Lovable project
+# Stockmaster
 
-## Project info
+Application de gestion de stock, ventes, achats, livraisons, devis et facturation.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Fonctionnalites principales
 
-## How can I edit this code?
+- Authentification avec Supabase
+- Isolation des donnees par utilisateur avec `RLS`
+- Gestion des clients, fournisseurs et produits
+- Gestion des achats, ventes, bons de livraison, devis et factures
+- Journal de caisse, inventaire, alertes et operations bancaires
+- Interface multilingue avec prise en charge du francais et de l'arabe
 
-There are several ways of editing your application.
+## Stack technique
 
-**Use Lovable**
+- React
+- TypeScript
+- Vite
+- Zustand
+- React Router
+- TanStack Query
+- Supabase
+- Tailwind CSS
+- shadcn/ui
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Lancement en local
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Variables d'environnement
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Configurez les variables suivantes avant de lancer l'application ou de la deployer:
 
-**Use GitHub Codespaces**
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_PUBLISHABLE_KEY=
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Un exemple est disponible dans [.env.example](file:///c:/Users/SFT/Desktop/project/drivertruck/stockmaster/stockmaster-maroc-main/.env.example).
 
-## What technologies are used for this project?
+## Build production
 
-This project is built with:
+```bash
+npm run build
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Deploiement
 
-## How can I deploy this project?
+Le projet peut etre deploye sur Vercel en utilisant:
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+- `Build Command`: `npm run build`
+- `Output Directory`: `dist`
+- `Root Directory`: racine du depot
 
-## Can I connect a custom domain to my Lovable project?
+## Base de donnees
 
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Le schema SQL principal est disponible dans [app_state.sql](file:///c:/Users/SFT/Desktop/project/drivertruck/stockmaster/stockmaster-maroc-main/supabase/app_state.sql).
